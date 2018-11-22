@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:batch="http://www.springframework.org/schema/batch"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans
+					    http://www.springframework.org/schema/beans/spring-beans.xsd
+					    http://www.springframework.org/schema/batch
+					    http://www.springframework.org/schema/batch/spring-batch.xsd">
+
+	<batch:job id="jobGraficaGarantia">
+		<batch:step id="step1"  >
+			<tasklet>
+				<chunk reader="itemReader" processor="itemProcessor" writer="headerCallback" commit-interval="5000" incremental="" />
+			</tasklet>
+		</batch:step>
+	</batch:job>
+
+	<!-- ItemReader. De onde o springbatch irá ler os dados -->
+	<bean id="itemReader" class="org.springframework.batch.item.database.JdbcCursorItemReader" scope="step">
+		<property name="dataSource" ref="dataSource" />
+		<property name="sql"
+				  value="SELECT DISTINCT
+							 ES.EXSRV_NM_BONECO [BONECO],
+							 ES.EXSRV_PRD_TYPE [TIPOPRODUTO],
+							 C.CLIENT_NM [NOME_SEGURADO],
+							 C.CLIENT_SSN_NBR [CPF_CNPJ],
+							 MP.PARTNER_ID [ID_PARCEIRO],
+							 PC.MP_NO[APOLICE],
+							 PC.MP_ENDORS_NO [ENDOSSO_APOLICE],
+							 MP.MP_PARENT_NO[APOLICE_VARIAVEL],
+							 C.CLIENT_BIRTH_DT [DTNASCIMENTO],
+							 ISNULL(C.CLIENT_GENDER_CD,'M')[SEXO],
+							 ISNULL(CA.CLNADDR_STREET_NM,'') +' , '+ ISNULL(CA.CLNADDR_STREET_NO,'') [LOGRADOURO],
+							 CA.CLNADDR_STREET_CP [COMPLEMENTO],
+							 CA.CLNADDR_BRANCH_NM [BAIRRO],
+							 CA.CLNADDR_CITY_NM[CIDADE],
+							 CA.CLNADDR_STATE_AC  [ESTADO],
+							 CA.CLNADDR_POST_CD[CEP],
+							 C.CLIENT_EMAIL_NM [EMAIL],
+							 C.CLIENT_EMAIL_NM [EMAIL_COMPLEMENTAR],
+							 NACIONALIDADE.PCOI_DESC [NACIONALIDADE],
+							 PC.POLCRT_KEYWORD_ID [CONTRATO],
+							 PC.POLCRT_ENDORS_NO [ENDOSSO],
+							 PC.POLICY_NO [CERTIFICADO],
+							 (PC.POLCRT_EFF_DTM - 1) [DATA_ADESAO],
+							 PC.POLCRT_EFF_DTM [INICIO_VIGENCIA],
+							 PC.POLCRT_EXP_DTM [FIM_VIGENCIA],
+							 POLCRT_PARTNER_PRODUCT_DS ,
+							 PC.POLCRT_FINANCED_VL [VALOR_FINANCIADO],
+							 PCC.PCCREC_CREDIT_CARD_NO [NUMERO_CARTAO_SEGURADO],
+							 PCR.LOC_RISC_ADR + ', ' + PCR.LOC_RISC_ADR_NBR [ENDERECO_RISCO],
+							 PCR.LOC_RISC_ADR_CMP [COMPLEMENTO_RISCO],
+							 PCR.LOC_RISC_NBH [BAIRRO_RISCO],
+							 PCR.LOC_RISC_CTY [CIDADE_RISCO],
+							 PCR.LOC_RISC_STE [ESTADO_RISCO],
+							 PCR.LOC_RISC_ZIP [CEP_RISCO]
+							FROM POLICY_CERTIFICATE PC
+							INNER JOIN CLIENT C ON C.CLIENT_NO = PC.CLIENT_NO AND C.CLIENT_DEL_FG = 'N'
+							INNER JOIN MASTER_POLICY MP ON MP.MP_NO = PC.MP_NO AND MP.MP_ENDORS_NO = PC.MP_ENDORS_NO AND MP.MP_DEL_FG = 'N'
+							INNER JOIN CLIENT_ADDRESS CA ON CA.CLIENT_NO = C.CLIENT_NO AND CA.CLNADDR_DEL_FG = 'N' AND CA.CLNADDR_MAIL_ADDRESS_FG = 'S'
+
+							LEFT JOIN POLICY_CERTIF_CREDIT_CARD PCC ON (PCC.POLICY_NO = PC.POLICY_NO AND PCC.POLCRT_ENDORS_NO = PC.POLCRT_ENDORS_NO)
+							LEFT JOIN POLICY_CERTIF_PAYMENT_ENDORS PCPE ON PCPE.POLICY_NO = PC.POLICY_NO AND PCPE.POLCRT_ENDORS_NO = PC.POLCRT_ENDORS_NO
+								AND PCPE.PAYEND_DEL_FG = 'N' AND PCPE.PAYEND_INSTMNT_NO = 1 AND PCPE.PAYEND_DUE_VL > 0.0
+
+							LEFT JOIN POLICY_CERTIF_INSURED_OBJECT_RES PCR ON PCR.POLICY_NO = PC.POLICY_NO
+
+							INNER JOIN MP_EXTERNAL_SERVICE MES ON MES.MP_NO = MP.MP_NO AND MES.MP_ENDORS_NO = MP.MP_ENDORS_NO
+							INNER JOIN EXTERNAL_SERVICE ES ON ES.EXSRV_ID = MES.EXSRV_ID AND ES.EXSRV_DEL_FG = 'N' AND ES.EXSRV_ENABLE = 'N'
+
+							OUTER APPLY(
+								SELECT PCOI_DESC
+								FROM POLICY_CERTIF_OTHER_INF PCOI
+								INNER JOIN POLICY_CERTIF_OTHER_INF_DOMAIN PCOID ON PCOI.PCOID_ID = PCOID.PCOID_ID AND PCOID_NAME = 'NACIONALIDADE'
+								WHERE PCOI.POLICY_NO = PC.POLICY_NO AND PCOI.POLCRT_ENDORS_NO = PC.POLCRT_ENDORS_NO
+							) NACIONALIDADE
+
+							CROSS APPLY (
+								SELECT MAX(XIN.CLNADDR_ID) MAXID
+								FROM CLIENT_ADDRESS XIN
+								WHERE XIN.CLIENT_NO = C.CLIENT_NO
+								AND  XIN.CLNADDR_DEL_FG = 'N'
+								AND XIN.CLNADDR_MAIL_ADDRESS_FG = 'S')  MAXADDR
+
+							CROSS APPLY (SELECT MAX(CERTIF.POLCRT_ENDORS_NO) ENDOSSO FROM POLICY_CERTIFICATE CERTIF
+											WHERE CERTIF.POLICY_NO = PC.POLICY_NO AND CERTIF.POLCRT_DEL_FG = 'N') CERTIF_ENDOSSO
+
+							WHERE CA.CLNADDR_ID = MAXADDR.MAXID
+								AND ES.EXSRV_NM_BONECO = '#{jobParameters['boneco']}'
+								AND PC.POLCRT_ENDORS_NO = CERTIF_ENDOSSO.ENDOSSO
+								AND PC.POLCRT_DEL_FG = 'N'
+								AND PC.POLST_ID = 1
+								AND PC.POLCRT_EXP_DTM > GETDATE()
+								AND PC.POLCRT_LETTER_EXPORT_DTM IS NULL
+								AND PC.POLCRT_UPD_DTM BETWEEN ES.EXSRV_DT_ULTIMA_EXT AND GETDATE()
+
+							ORDER BY C.CLIENT_NM" />
+
+		<property name="rowMapper">
+			<bean class="br.com.cardif.etl.grafica.mapper.DadosSeguradoRowMapper" />
+		</property>
+	</bean>
+
+	<!-- ItemProcessor. -->
+	<bean id="itemProcessor" class="br.com.cardif.etl.grafica.processor.GraficaJobProcessor" />
+
+	<!-- ItemWriter. Onde o springbatch deverá gerar o arquivo de saída -->
+	<bean id="etlItemWriter" class="br.com.cardif.etl.grafica.writer.GraficaFlatFileItemWriter">
+		<property name="delegate" ref="itemWriter" />
+		<property name="layoutDAO" ref="layoutDAO" />
+		<property name="cardifEtlUtils" ref="cardifEtlUtils" />
+	</bean>
+
+	<!-- Delegate ItemWriter. Utilizado para poder gerar a linha de sumário -->
+	<bean id="itemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter">
+		<property name="lineAggregator">
+			<bean class="org.springframework.batch.item.file.transform.PassThroughLineAggregator" />
+		</property>
+		<property name="encoding" value="ISO-8859-1" />
+		<property name="headerCallback" ref="headerCallback" />
+		<property name="footerCallback" ref="etlItemWriter" />
+	</bean>
+
+	<!-- Monta e header do arquivo -->
+	<bean id="headerCallback" class="br.com.cardif.etl.jobs.EtlFlatFileHeaderCallback" init-method="init" scope="step">
+		<property name="delegate" ref="itemWriter" />
+		<property name="layoutDAO" ref="layoutDAO" />
+		<property name="cardifEtlUtils" ref="cardifEtlUtils" />
+		<property name="layoutVersionId" value="#{jobParameters['layoutVersionId']}" />
+		<property name="boneco" value="#{jobExecutionContext['boneco']}" />
+	</bean>
+
+	<!-- Gerencia os layout cadastrados no sistema ETL -->
+	<bean id="layoutDAO" class="br.com.cardif.etl.jobs.LayoutDAO">
+		<property name="dataSource" ref="etlDataSource" />
+	</bean>
+	<bean id="cardifEtlUtils" class="br.com.cardif.etl.util.CardifEtlUtils">
+		<property name="dataSource" ref="etlDataSource" />
+	</bean>
+
+	<!-- Banco de dados (repositório) que o Springbatch utiliza para controlar 
+		a execução dos jobs -->
+	<bean id="jobRepository"
+		  class="org.springframework.batch.core.repository.support.JobRepositoryFactoryBean">
+		<property name="dataSource" ref="etlDataSource" />
+		<property name="transactionManager" ref="transactionManager" />
+		<property name="databaseType" value="SQLSERVER" />
+	</bean>
+
+	<!-- Controla a execução de um job -->
+	<bean id="jobLauncher"
+		  class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+		<property name="jobRepository" ref="jobRepository" />
+	</bean>
+</beans>

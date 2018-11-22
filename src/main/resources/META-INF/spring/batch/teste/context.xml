@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+						http://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/context
+						http://www.springframework.org/schema/context/spring-context.xsd
+						http://www.springframework.org/schema/aop 
+       					http://www.springframework.org/schema/aop/spring-aop-3.2.xsd">
+
+	<import resource="persistence.xml" />
+	<import resource="job.xml" />
+
+	<!-- Ativa configuração de beans do Spring por annotation -->
+	<context:annotation-config />
+	<context:component-scan base-package="br.com.cardif.etl.grafica" />
+
+	<!-- Configuração das classes para buscar o boneco respectivo -->
+	<bean name="templateConfig" class="br.com.cardif.etl.grafica.boneco.ProcessaBoneco">
+		<!-- Mapeamento do código do boneco para o Processor especifico -->
+		<property name="templateMapping">
+			<map key-type="java.lang.Integer" value-type="java.lang.Class">
+
+				<entry key="1">
+					<bean class="br.com.cardif.etl.grafica.boneco.Automotivo" />
+				</entry>
+				<entry key="2">
+					<bean class="br.com.cardif.etl.grafica.boneco.Imobiliario" />
+				</entry>
+				<entry key="3">
+					<bean class="br.com.cardif.etl.grafica.boneco.Vida" />
+				</entry>
+				<entry key="4">
+					<bean class="br.com.cardif.etl.grafica.boneco.GarantiaExtendida" />
+				</entry>
+                <entry key="5">
+                    <bean class="br.com.cardif.etl.grafica.boneco.ProdutoMisto" />
+                </entry>
+			</map>
+		</property>
+	</bean>
+</beans>

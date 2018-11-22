@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	   xmlns:tx="http://www.springframework.org/schema/tx" xmlns:jee="http://www.springframework.org/schema/jee"
+	   xsi:schemaLocation="http://www.springframework.org/schema/beans
+						http://www.springframework.org/schema/beans/spring-beans.xsd
+						http://www.springframework.org/schema/tx
+						http://www.springframework.org/schema/tx/spring-tx.xsd http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee.xsd">
+						
+	<tx:annotation-driven transaction-manager="transactionManager" />
+
+	<!-- Transaction manager para suportar o Springbatch. -->
+	<bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" />
+
+	<bean id="namedParameterJdbcTemplate" class="org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate">
+		<constructor-arg name="classicJdbcTemplate" ref="jdbcTemplate" />
+	</bean>
+
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<constructor-arg name="dataSource" ref="dataSource" />
+	</bean>
+	
+	 <!-- Datasource para suportar o Springbatch e o ETL. NÃO deve ser misturado com outros datasources (life, egarantia, etc) -->
+    <!--<jee:jndi-lookup id="etlDataSource" jndi-name="java:jboss/datasources/dbEtlDS" expected-type="javax.sql.DataSource" />-->
+
+    <!-- Datasource para suportar o job. Onde o job irá ler/gravar os dados (life, egarantia, etc) etlGarantiasDS, etlProdLifeDS -->
+    <!--<jee:jndi-lookup id="dataSource" jndi-name="java:jboss/datasources/etlProdLifeDS" expected-type="javax.sql.DataSource" />-->
+	<!--<jee:jndi-lookup id="dataSource" jndi-name="java:jboss/datasources/etlGarantiasDS" expected-type="javax.sql.DataSource" />-->
+	<!--<jee:jndi-lookup id="garantiasDataSource" jndi-name="java:jboss/datasources/etlGarantiasDS" expected-type="javax.sql.DataSource" />-->
+	<!--<jee:jndi-lookup id="lifeDataSource" jndi-name="java:jboss/datasources/etlProdLifeDS" expected-type="javax.sql.DataSource" />-->
+    
+    <!-- INICIO - Datasource  para ambiente de DESENVOLVIMENTO-->
+	<bean id="etlDataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+		<property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver" />
+		<property name="url" value="jdbc:sqlserver://SAOS005DB09D;databaseName=dbEtl;portNumber=1433" />
+		<property name="username" value="userdes" />
+		<property name="password" value="userdes" />
+	</bean>
+
+	<!-- Datasource a ser utilizado para ler/escrever dados operacionais (life, egarantia, etc)-->
+	<bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource" >
+		<property name="driverClassName" value="com.microsoft.sqlserver.jdbc.SQLServerDriver" />
+		<!--<property name="url" value="jdbc:sqlserver://SAOS005DB09D;databaseName=dbGarantias;portNumber=1433" />-->
+		<!--<property name="username" value="userdes" />-->
+		<!--<property name="password" value="userdes" />-->
+
+		<property name="url" value="jdbc:sqlserver://SAOS005DB03T;databaseName=dbGarantias;portNumber=1433" />
+		<property name="username" value="827068" />
+		<property name="password" value="C@rdif2018!" />
+	</bean>
+	 <!-- FIM - TROCAR OS DATASOURCES PARA SUBIDA EM AMBIENTE QA E PRODUÇÃO -->
+</beans>
